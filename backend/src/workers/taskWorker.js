@@ -1,9 +1,11 @@
 import { Worker } from 'bullmq';
-import { getRedisConnectionOptions } from '../config/redis.js';
+import { getRedisConnectionOptions, isClusterEnabled, createRedisClient } from '../config/redis.js';
 import { dlqQueue } from '../queues/taskQueue.js';
 import { JobLog } from '../models/JobLog.js';
 
-const connection = getRedisConnectionOptions();
+const connection = isClusterEnabled()
+  ? createRedisClient('Worker')
+  : getRedisConnectionOptions();
 
 // Helper sleep function for simulating processing delays
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

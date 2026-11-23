@@ -1,0 +1,101 @@
+version: '3.8'
+
+# Redis Multi-Node Cluster: 3 Masters + 3 Replicas (Total 6 Nodes)
+services:
+  redis-node-1:
+    image: redis:7-alpine
+    container_name: redis-cluster-1
+    command: redis-server --port 7000 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --protected-mode no
+    ports:
+      - "7000:7000"
+      - "17000:17000" # Cluster bus port (port + 10000)
+    networks:
+      redis-cluster-net:
+        ipv4_address: 172.28.0.11
+
+  redis-node-2:
+    image: redis:7-alpine
+    container_name: redis-cluster-2
+    command: redis-server --port 7001 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --protected-mode no
+    ports:
+      - "7001:7001"
+      - "17001:17001"
+    networks:
+      redis-cluster-net:
+        ipv4_address: 172.28.0.12
+
+  redis-node-3:
+    image: redis:7-alpine
+    container_name: redis-cluster-3
+    command: redis-server --port 7002 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --protected-mode no
+    ports:
+      - "7002:7002"
+      - "17002:17002"
+    networks:
+      redis-cluster-net:
+        ipv4_address: 172.28.0.13
+
+  redis-node-4:
+    image: redis:7-alpine
+    container_name: redis-cluster-4
+    command: redis-server --port 7003 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --protected-mode no
+    ports:
+      - "7003:7003"
+      - "17003:17003"
+    networks:
+      redis-cluster-net:
+        ipv4_address: 172.28.0.14
+
+  redis-node-5:
+    image: redis:7-alpine
+    container_name: redis-cluster-5
+    command: redis-server --port 7004 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --protected-mode no
+    ports:
+      - "7004:7004"
+      - "17004:17004"
+    networks:
+      redis-cluster-net:
+        ipv4_address: 172.28.0.15
+
+  redis-node-6:
+    image: redis:7-alpine
+    container_name: redis-cluster-6
+    command: redis-server --port 7005 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --protected-mode no
+    ports:
+      - "7005:7005"
+      - "17005:17005"
+    networks:
+      redis-cluster-net:
+        ipv4_address: 172.28.0.16
+
+  # Automated Cluster Initiator Container
+  redis-cluster-init:
+    image: redis:7-alpine
+    container_name: redis-cluster-creator
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    command: >
+      sh -c "sleep 3 &&
+      echo 'yes' | redis-cli --cluster create
+      172.28.0.11:7000
+      172.28.0.12:7001
+      172.28.0.13:7002
+      172.28.0.14:7003
+      172.28.0.15:7004
+      172.28.0.16:7005
+      --cluster-replicas 1"
+    networks:
+      redis-cluster-net:
+
+networks:
+  redis-cluster-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+

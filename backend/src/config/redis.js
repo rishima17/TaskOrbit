@@ -1,12 +1,34 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Redis } from 'ioredis';
+import { Redis, Cluster } from 'ioredis';
 
 // Ensure environment variables are loaded immediately even when imported early
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+/**
+ * Check if Redis Cluster mode is active
+ */
+export const isClusterEnabled = () => Boolean(process.env.REDIS_CLUSTER_NODES);
+
+/**
+ * Parse comma-separated cluster node addresses:
+ * Example: "127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002"
+ */
+export const getClusterNodes = () => {
+  if (!process.env.REDIS_CLUSTER_NODES) return [];
+  return process.env.REDIS_CLUSTER_NODES.split(',').map((entry) => {
+    const trimmed = entry.trim();
+    if (trimmed.startsWith('redis://') || trimmed.startsWith('rediss://')) {
+      const u = new URL(trimmed);
+      return { host: u.hostname, port: parseInt(u.port || '6379', 10) };
+    }
+    const [host, port] = trimmed.split(':');
+    return { host: host || '127.0.0.1', port: parseInt(port || '7000', 10) };
+  });
+};
 
 /**
  * Standard Redis connection options for BullMQ & Express.
@@ -52,8 +74,37 @@ export const getRedisConnectionOptions = () => {
 /**
  * Factory to create dedicated Redis instances (BullMQ requires dedicated instances
  * for Queue, Worker, and QueueEvents to avoid blocking commands clashing).
+ * Automatically supports both Standalone Redis and Redis Cluster.
  */
 export const createRedisClient = (label = 'Default') => {
+  // 1. Cluster Mode Support
+  if (isClusterEnabled()) {
+    const nodes = getClusterNodes();
+    const cluster = new Cluster(nodes, {
+      redisOptions: {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        password: process.env.REDIS_PASSWORD || undefined,
+      },
+      scaleReads: 'slave',
+    });
+
+    cluster.on('connect', () => {
+      console.log(`[Redis Cluster:${label}] Connected successfully`);
+    });
+
+    cluster.on('error', (err) => {
+      console.error(`[Redis Cluster:${label} Error]`, err.message);
+    });
+
+    cluster.on('close', () => {
+      console.warn(`[Redis Cluster:${label}] Connection closed`);
+    });
+
+    return cluster;
+  }
+
+  // 2. Standalone Mode Support
   const options = getRedisConnectionOptions();
   let client;
 
@@ -78,6 +129,6 @@ export const createRedisClient = (label = 'Default') => {
   return client;
 };
 
-// Default singleton client for simple cache/pubsub
+// Default singleton client for simple cache/pubsub/health-check
 export const defaultRedis = createRedisClient('App');
 

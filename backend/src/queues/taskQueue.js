@@ -1,7 +1,17 @@
 import { Queue, QueueEvents } from 'bullmq';
-import { getRedisConnectionOptions } from '../config/redis.js';
+import { getRedisConnectionOptions, isClusterEnabled, createRedisClient } from '../config/redis.js';
 
-const connection = getRedisConnectionOptions();
+const connection = isClusterEnabled()
+  ? createRedisClient('TaskQueue')
+  : getRedisConnectionOptions();
+
+const dlqConnection = isClusterEnabled()
+  ? createRedisClient('DlqQueue')
+  : connection;
+
+const eventsConnection = isClusterEnabled()
+  ? createRedisClient('QueueEvents')
+  : connection;
 
 /**
  * Default job options as specified:
@@ -35,7 +45,7 @@ export const taskQueue = new Queue('taskQueue', {
  * Jobs that exhaust all 3 retry attempts in taskQueue get pushed here.
  */
 export const dlqQueue = new Queue('dlqQueue', {
-  connection,
+  connection: dlqConnection,
   defaultJobOptions: {
     removeOnComplete: false,
     removeOnFail: false,
@@ -47,7 +57,7 @@ export const dlqQueue = new Queue('dlqQueue', {
  * Used by SSE controller for real-time progress, completion, and failure streaming.
  */
 export const taskQueueEvents = new QueueEvents('taskQueue', {
-  connection,
+  connection: eventsConnection,
 });
 
 /**
