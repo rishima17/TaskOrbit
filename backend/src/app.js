@@ -87,6 +87,23 @@ export const createApp = () => {
     });
   });
 
+  // Root API Landing endpoint
+  app.get('/', (req, res) => {
+    res.status(200).json({
+      status: 'online',
+      service: 'TaskOrbit - Distributed Asynchronous Task Queue & Telemetry Platform API',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      endpoints: {
+        health: '/health',
+        auth: '/api/auth',
+        jobs: '/api/jobs',
+        admin: '/api/admin',
+      },
+      client: process.env.CLIENT_URL || 'Deploy frontend on Vercel',
+    });
+  });
+
   // Mount Application Routes
   app.use('/api/auth', authRoutes);
   app.use('/api/jobs', jobRoutes);
