@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # 1. MongoDB Persistence
+  mongodb:
+    image: mongo:7.0
+    container_name: taskorbit_prod_mongo
+    restart: always
+    volumes:
+      - mongo_prod_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=task_queue_db
+    networks:
+      - taskorbit_network
+
+  # 2. Redis Message Broker & State
+  redis:
+    image: redis:7-alpine
+    container_name: taskorbit_prod_redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_prod_data:/data
+    networks:
+      - taskorbit_network
+
+  # 3. Express Ingestion API Server
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskorbit_prod_api
+    restart: always
+    command: ["node", "src/server.js"]
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/task_queue_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=taskorbit_production_secure_jwt_secret_key_change_me_9988
+      - CLIENT_URL=http://localhost
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - taskorbit_network
+
+  # 4. Decoupled BullMQ Background Worker Node
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskorbit_prod_worker
+    restart: always
+    command: ["node", "src/workers/worker.js"]
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/task_queue_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=taskorbit_production_secure_jwt_secret_key_change_me_9988
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - taskorbit_network
+
+  # 5. Production Web Gateway / Frontend Nginx Proxy
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskorbit_prod_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - taskorbit_network
+
+volumes:
+  mongo_prod_data:
+  redis_prod_data:
+
+networks:
+  taskorbit_network:
+    driver: bridge
+
